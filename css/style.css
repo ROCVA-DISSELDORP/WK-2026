@@ -647,6 +647,12 @@ input, textarea, select { font-family: inherit; }
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
 }
+.member-link {
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.2s;
+}
+.member-link:hover { border-color: var(--border-hi); }
 .member-avatar {
     display: grid;
     place-items: center;

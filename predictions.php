@@ -7,6 +7,43 @@ $user = currentUser();
 
 $errors  = [];
 $success = '';
+$predictions = [];
+$view_user = $user;
+$view_user_id = (int)($_GET['user_id'] ?? $user['id']);
+$pool_id = (int)($_GET['pool_id'] ?? 0);
+$is_own_predictions = $view_user_id === (int)$user['id'];
+
+if ($view_user_id <= 0) {
+    $view_user_id = (int)$user['id'];
+    $is_own_predictions = true;
+}
+
+if (!$is_own_predictions) {
+    if ($pool_id <= 0) {
+        header('Location: pools.php');
+        exit;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT u.id, u.name, u.email
+            FROM users u
+            INNER JOIN pool_members pm_target ON pm_target.user_id = u.id AND pm_target.pool_id = ?
+            INNER JOIN pool_members pm_me ON pm_me.pool_id = pm_target.pool_id AND pm_me.user_id = ?
+            WHERE u.id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$pool_id, $user['id'], $view_user_id]);
+        $view_user = $stmt->fetch();
+    } catch (PDOException $e) {
+        $view_user = false;
+    }
+
+    if (!$view_user) {
+        header('Location: pools.php');
+        exit;
+    }
+}
 
 // Alle wedstrijden ophalen
 try {
@@ -19,7 +56,7 @@ try {
 // Bestaande voorspellingen van de gebruiker ophalen
 try {
     $stmt = $pdo->prepare("SELECT * FROM predictions WHERE user_id = ?");
-    $stmt->execute([$user['id']]);
+    $stmt->execute([$view_user_id]);
     foreach ($stmt->fetchAll() as $row) {
         $predictions[$row['match_id']] = $row;
     }
@@ -28,7 +65,7 @@ try {
 }
 
 // Voorspellingen opslaan / updaten bij POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_own_predictions) {
     $sql = "INSERT INTO predictions (user_id, match_id, predicted_home, predicted_away)
             VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
@@ -48,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $stmt->execute([
-            $user['id'], (int)$match_id, (int)$home, (int)$away
+            $view_user_id, (int)$match_id, (int)$home, (int)$away
         ]);
     }
 
@@ -56,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Predictions array vernieuwen met nieuwe data
     $stmt2 = $pdo->prepare("SELECT * FROM predictions WHERE user_id = ?");
-    $stmt2->execute([$user['id']]);
+    $stmt2->execute([$view_user_id]);
     $predictions = [];
     foreach ($stmt2->fetchAll() as $row) {
         $predictions[$row['match_id']] = $row;
@@ -69,11 +106,25 @@ include __DIR__ . '/includes/header.php';
 ?>
 
 <div class="container">
+    <?php if ($pool_id > 0): ?>
+        <div style="margin-bottom: 24px;">
+            <a href="pool_detail.php?id=<?= $pool_id ?>" class="nav-link" style="padding-left: 0;">← Terug naar poule</a>
+        </div>
+    <?php endif; ?>
+
     <div class="page-header">
         <div>
             <div class="page-eyebrow">Speelronde</div>
-            <h1 class="page-title">Voorspel de uitslagen</h1>
-            <p class="page-desc">Vul per wedstrijd je voorspelde eindstand in. Lege velden worden genegeerd. Je kunt je voorspellingen later nog aanpassen.</p>
+            <h1 class="page-title">
+                <?= $is_own_predictions
+                    ? 'Voorspel de uitslagen'
+                    : 'Voorspellingen van ' . htmlspecialchars($view_user['name']) ?>
+            </h1>
+            <p class="page-desc">
+                <?= $is_own_predictions
+                    ? 'Vul per wedstrijd je voorspelde eindstand in. Lege velden worden genegeerd. Je kunt je voorspellingen later nog aanpassen.'
+                    : 'Je bekijkt hier de voorspellingen van een medespeler uit jouw poule.' ?>
+            </p>
         </div>
     </div>
 
@@ -92,7 +143,8 @@ include __DIR__ . '/includes/header.php';
             <p class="empty-text">Zodra TODO 1 is afgemaakt zie je hier alle wedstrijden verschijnen.</p>
         </div>
     <?php else: ?>
-        <form method="POST" action="predictions.php">
+        <?php if ($is_own_predictions): ?>
+        <form method="POST" action="predictions.php<?= $pool_id > 0 ? '?pool_id=' . $pool_id : '' ?>">
             <div class="match-list">
                 <?php foreach ($matches as $match):
                     $mid = (int)$match['id'];
@@ -144,6 +196,48 @@ include __DIR__ . '/includes/header.php';
                 </button>
             </div>
         </form>
+        <?php else: ?>
+        <div class="match-list">
+            <?php foreach ($matches as $match):
+                $mid = (int)$match['id'];
+                $existing = $predictions[$mid] ?? null;
+                $home_val = $existing['predicted_home'] ?? '-';
+                $away_val = $existing['predicted_away'] ?? '-';
+                $date = new DateTime($match['match_date']);
+            ?>
+                <div class="match">
+                    <div class="match-meta">
+                        <span class="match-stage"><?= htmlspecialchars($match['stage']) ?></span>
+                        <span><?= $date->format('d M Y · H:i') ?></span>
+                    </div>
+
+                    <div class="match-row">
+                        <div class="team team-home">
+                            <span class="team-name"><?= htmlspecialchars($match['home_team']) ?></span>
+                            <span class="team-flag"><?= strtoupper(substr($match['home_team'], 0, 2)) ?></span>
+                        </div>
+
+                        <div class="score-input-group">
+                            <input type="number"
+                                   class="score-input"
+                                   value="<?= htmlspecialchars((string)$home_val) ?>"
+                                   disabled>
+                            <span class="score-sep">:</span>
+                            <input type="number"
+                                   class="score-input"
+                                   value="<?= htmlspecialchars((string)$away_val) ?>"
+                                   disabled>
+                        </div>
+
+                        <div class="team">
+                            <span class="team-flag"><?= strtoupper(substr($match['away_team'], 0, 2)) ?></span>
+                            <span class="team-name"><?= htmlspecialchars($match['away_team']) ?></span>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
     <?php endif; ?>
 </div>
 

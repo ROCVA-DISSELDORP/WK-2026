@@ -81,7 +81,7 @@ include __DIR__ . '/includes/header.php';
 
             <div class="member-list">
                 <?php foreach ($members as $member): ?>
-                    <div class="member">
+                    <a class="member member-link" href="predictions.php?pool_id=<?= (int)$pool['id'] ?>&user_id=<?= (int)$member['id'] ?>">
                         <div class="member-avatar">
                             <?= strtoupper(substr(htmlspecialchars($member['name']), 0, 1)) ?>
                         </div>
@@ -92,7 +92,7 @@ include __DIR__ . '/includes/header.php';
                         <?php if ((int)$member['id'] === (int)$pool['created_by']): ?>
                             <span class="member-badge">Beheerder</span>
                         <?php endif; ?>
-                    </div>
+                    </a>
                 <?php endforeach; ?>
             </div>
         </section>
