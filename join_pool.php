@@ -27,116 +27,52 @@ $user = currentUser();
 
 $errors  = [];
 $code    = '';
+$pool    = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // De code uit het formulier: trim (spaties weg) + uppercase voor
     // hoofdletter-ongevoelige matching. Dus "abc12345" wordt "ABC12345".
     $code = strtoupper(trim($_POST['access_code'] ?? ''));
 
-    // =============================================================
-    // TODO 1: VALIDATIE
-    // =============================================================
-    // Controleer dat de toegangscode niet leeg is.
-    //
-    //   if ($code === '') {
-    //       $errors[] = 'Vul een toegangscode in.';
-    //   }
-    //
-    // EXTRA (optioneel, goed voor gevorderden):
-    // Je kunt ook checken dat de code precies 8 tekens lang is, want
-    // zo wordt hij gegenereerd in create_pool.php. Maar omdat we de
-    // code toch gaan opzoeken in de database, is dit niet strict nodig.
-    // =============================================================
+    // Validatie
+    if ($code === '') {
+        $errors[] = 'Vul een toegangscode in.';
+    }
 
+    // Poule zoeken op basis van code
+    if (empty($errors)) {
+        $stmt = $pdo->prepare("SELECT * FROM pools WHERE access_code = ?");
+        $stmt->execute([$code]);
+        $pool = $stmt->fetch();
 
-    // =============================================================
-    // TODO 2: POULE ZOEKEN OP BASIS VAN CODE
-    // =============================================================
-    // Voer deze stap alleen uit als $errors leeg is.
-    //
-    // Zoek in de `pools` tabel naar een rij met deze access_code.
-    // Gebruik een prepared statement:
-    //
-    //   $stmt = $pdo->prepare("SELECT * FROM pools WHERE access_code = ?");
-    //   $stmt->execute([$code]);
-    //   $pool = $stmt->fetch();
-    //
-    // Als $pool "false" is (niet gevonden), voeg dan een foutmelding toe:
-    //
-    //   if (!$pool) {
-    //       $errors[] = 'Deze toegangscode is onbekend.';
-    //   }
-    //
-    // BELANGRIJK: declareer $pool = null; bovenaan het if-blok, zodat
-    // je hem in TODO 3 en 4 kunt gebruiken. Dus vóór TODO 1:
-    //
-    //   $pool = null;  // zie bovenkant van dit blok
-    //
-    // Of zet deze zelf alvast neer.
-    // =============================================================
+        if (!$pool) {
+            $errors[] = 'Deze toegangscode is onbekend.';
+        }
+    }
 
+    // Controleer of gebruiker al lid is
+    if (empty($errors) && $pool) {
+        $stmt = $pdo->prepare(
+            "SELECT id FROM pool_members WHERE pool_id = ? AND user_id = ?"
+        );
+        $stmt->execute([$pool['id'], $user['id']]);
 
-    // =============================================================
-    // TODO 3: CONTROLEER OF GEBRUIKER AL LID IS
-    // =============================================================
-    // Alleen uitvoeren als $errors leeg is EN $pool gevonden is.
-    //
-    // Zoek in de `pool_members` tabel of er al een rij is met deze
-    // pool_id en user_id:
-    //
-    //   $stmt = $pdo->prepare(
-    //       "SELECT id FROM pool_members WHERE pool_id = ? AND user_id = ?"
-    //   );
-    //   $stmt->execute([$pool['id'], $user['id']]);
-    //
-    //   if ($stmt->fetch()) {
-    //       // Gebruiker is al lid → stuur direct door naar de detailpagina.
-    //       // We geven GEEN foutmelding; we willen dat het "gewoon werkt".
-    //       header('Location: pool_detail.php?id=' . $pool['id']);
-    //       exit;
-    //   }
-    //
-    // WAAROM GEEN FOUTMELDING?
-    // Stel je voor: een student krijgt de code, klikt, wordt toegevoegd
-    // en ziet de poule. Een week later klikt hij per ongeluk nog een
-    // keer op dezelfde link. In plaats van "je bent al lid!" te zeggen,
-    // is het vriendelijker om hem gewoon naar de poule te sturen.
-    //
-    // Dit patroon heet "idempotent": dezelfde actie meerdere keren
-    // uitvoeren heeft hetzelfde eindresultaat.
-    // =============================================================
+        if ($stmt->fetch()) {
+            header('Location: pool_detail.php?id=' . $pool['id']);
+            exit;
+        }
+    }
 
+    // Gebruiker toevoegen aan poule
+    if (empty($errors) && $pool) {
+        $stmt = $pdo->prepare(
+            "INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)"
+        );
+        $stmt->execute([$pool['id'], $user['id']]);
 
-    // =============================================================
-    // TODO 4: GEBRUIKER TOEVOEGEN AAN POULE
-    // =============================================================
-    // Alleen uitvoeren als $errors leeg is, $pool gevonden is, en
-    // de gebruiker nog geen lid is (TODO 3 heeft dan niet geredirect).
-    //
-    // Voeg een rij toe aan `pool_members`:
-    //
-    //   $stmt = $pdo->prepare(
-    //       "INSERT INTO pool_members (pool_id, user_id) VALUES (?, ?)"
-    //   );
-    //   $stmt->execute([$pool['id'], $user['id']]);
-    //
-    //   header('Location: pool_detail.php?id=' . $pool['id']);
-    //   exit;
-    //
-    // TIP: je kunt de 4 TODO's het beste aan elkaar koppelen met
-    // "als er geen fouten zijn" controles, bijvoorbeeld:
-    //
-    //   if (empty($errors)) {
-    //       // ... zoek poule ...
-    //   }
-    //   if (empty($errors) && $pool) {
-    //       // ... check of al lid ...
-    //   }
-    //   if (empty($errors) && $pool) {
-    //       // ... toevoegen + redirect ...
-    //   }
-    // =============================================================
-
+        header('Location: pool_detail.php?id=' . $pool['id']);
+        exit;
+    }
 }
 
 $pageTitle = 'Poule joinen';

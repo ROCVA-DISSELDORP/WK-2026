@@ -21,54 +21,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password']   ?? '';
 
-    // =============================================================
-    // TODO 1: VALIDATIE
-    // =============================================================
-    // Controleer dat zowel $email als $password niet leeg zijn.
-    // Voeg bij ontbrekende velden een foutmelding toe aan $errors.
-    //
-    // Bijvoorbeeld:
-    //   if ($email === '') {
-    //       $errors[] = 'E-mailadres is verplicht.';
-    //   }
-    // =============================================================
+    // Validatie
+    if ($email === '') {
+        $errors[] = 'E-mailadres is verplicht.';
+    }
+    if ($password === '') {
+        $errors[] = 'Wachtwoord is verplicht.';
+    }
 
+    // Gebruiker ophalen & wachtwoord verifiëren
+    if (empty($errors)) {
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        $dbUser = $stmt->fetch();
 
-    // =============================================================
-    // TODO 2: GEBRUIKER OPHALEN & WACHTWOORD VERIFIËREN
-    // =============================================================
-    // Alleen uitvoeren als $errors nog leeg is.
-    //
-    //  a) Haal de gebruiker op uit de database op basis van e-mail:
-    //       $stmt = $pdo->prepare("");
-    //       $stmt->execute([$?]);
-    //       $user = $stmt->fetch();
-    //
-    //  b) Controleer of de gebruiker bestaat EN of het wachtwoord klopt
-    //     met password_verify():
-    //       if ($user && password_verify($password, $user['?'])) {
-    //           // login gelukt
-    //       } else {
-    //           $errors[] = 'Ongeldige inloggegevens.';
-    //       }
-    //
-    //  TIP: geef GEEN aparte foutmelding voor "gebruiker bestaat niet"
-    //  versus "wachtwoord klopt niet" - dat is onveilig.
-    // =============================================================
+        if ($dbUser && password_verify($password, $dbUser['password'])) {
+            // Sessie starten
+            $_SESSION['user_id']    = $dbUser['id'];
+            $_SESSION['user_name']  = $dbUser['name'];
+            $_SESSION['user_email'] = $dbUser['email'];
 
-
-    // =============================================================
-    // TODO 3: SESSIE STARTEN
-    // =============================================================
-    // Als de login is geslaagd, sla dan het volgende op in de sessie:
-    //   $_SESSION['user_id']    = $user['id'];
-    //   $_SESSION['user_name']  = $user['name'];
-    //   $_SESSION['user_email'] = $user['email'];
-    //
-    // Stuur vervolgens door naar het dashboard:
-    //   header('Location: index.php');
-    //   exit;
-    // =============================================================
+            header('Location: index.php');
+            exit;
+        } else {
+            $errors[] = 'Ongeldige inloggegevens.';
+        }
+    }
 
 }
 

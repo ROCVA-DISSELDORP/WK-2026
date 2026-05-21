@@ -8,84 +8,60 @@ $user = currentUser();
 $errors  = [];
 $success = '';
 
-// =============================================================
-// TODO 1: ALLE WEDSTRIJDEN OPHALEN
-// =============================================================
-// Haal alle wedstrijden op uit de `matches` tabel, gesorteerd op
-// match_date (oplopend). Sla ze op in de variabele $matches.
-//
-// Voorbeeld:
-//   $stmt = $pdo->query("SELECT * FROM matches ORDER BY match_date ASC");
-//   $matches = $stmt->fetchAll();
-//
-// Als de query faalt (bv. tabel bestaat niet), laat $matches dan een
-// lege array zijn zodat de pagina geen fatal error geeft.
-// =============================================================
+// Alle wedstrijden ophalen
+try {
+    $stmt = $pdo->query("SELECT * FROM matches ORDER BY match_date ASC");
+    $matches = $stmt->fetchAll();
+} catch (PDOException $e) {
+    $matches = [];
+}
 
-$matches = []; // <-- studenten vullen deze vanuit de query
+// Bestaande voorspellingen van de gebruiker ophalen
+try {
+    $stmt = $pdo->prepare("SELECT * FROM predictions WHERE user_id = ?");
+    $stmt->execute([$user['id']]);
+    foreach ($stmt->fetchAll() as $row) {
+        $predictions[$row['match_id']] = $row;
+    }
+} catch (PDOException $e) {
+    $predictions = [];
+}
 
+// Voorspellingen opslaan / updaten bij POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $sql = "INSERT INTO predictions (user_id, match_id, predicted_home, predicted_away)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+              predicted_home = VALUES(predicted_home),
+              predicted_away = VALUES(predicted_away)";
+    $stmt = $pdo->prepare($sql);
 
-// =============================================================
-// TODO 2: BESTAANDE VOORSPELLINGEN VAN DE GEBRUIKER OPHALEN
-// =============================================================
-// Haal de voorspellingen op die deze gebruiker al eerder heeft
-// gedaan. Bewaar ze in een associatieve array met match_id als key,
-// zodat je ze makkelijk per wedstrijd kunt tonen.
-//
-// Voorbeeld:
-//   $stmt = $pdo->prepare("SELECT * FROM predictions WHERE user_id = ?");
-//   $stmt->execute([$user['id']]);
-//   foreach ($stmt->fetchAll() as $row) {
-//       $predictions[$row['match_id']] = $row;
-//   }
-// =============================================================
+    foreach ($_POST['predictions'] ?? [] as $match_id => $scores) {
+        $home = $scores['home'] ?? '';
+        $away = $scores['away'] ?? '';
 
-$predictions = []; // <-- studenten vullen deze
+        if ($home === '' || $away === '') {
+            continue;
+        }
+        if (!ctype_digit((string)$home) || !ctype_digit((string)$away)) {
+            continue;
+        }
 
+        $stmt->execute([
+            $user['id'], (int)$match_id, (int)$home, (int)$away
+        ]);
+    }
 
-// =============================================================
-// TODO 3: VOORSPELLINGEN OPSLAAN / UPDATEN BIJ POST
-// =============================================================
-// Wanneer het formulier wordt verzonden, loop je over alle
-// $_POST['predictions'] heen en sla je ze op in de database.
-//
-// Belangrijke tips:
-//  - Gebruik INSERT ... ON DUPLICATE KEY UPDATE zodat bestaande
-//    voorspellingen automatisch worden bijgewerkt. De unique key
-//    (user_id, match_id) is al in de database ingesteld.
-//  - Valideer dat de scores gehele getallen zijn (>= 0 en <= 99).
-//  - Skip lege invoervelden (dan heeft de gebruiker voor die
-//    wedstrijd geen voorspelling ingevuld).
-//
-// Voorbeeld:
-//   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-//       $sql = "INSERT INTO predictions (user_id, match_id, predicted_home, predicted_away)
-//               VALUES (?, ?, ?, ?)
-//               ON DUPLICATE KEY UPDATE
-//                 predicted_home = VALUES(predicted_home),
-//                 predicted_away = VALUES(predicted_away)";
-//       $stmt = $pdo->prepare($sql);
-//
-//       foreach ($_POST['predictions'] ?? [] as $match_id => $scores) {
-//           $home = $scores['home'] ?? '';
-//           $away = $scores['away'] ?? '';
-//
-//           if ($home === '' || $away === '') {
-//               continue; // niet ingevuld → overslaan
-//           }
-//           if (!ctype_digit((string)$home) || !ctype_digit((string)$away)) {
-//               continue; // ongeldige invoer → overslaan
-//           }
-//
-//           $stmt->execute([
-//               $user['id'], (int)$match_id, (int)$home, (int)$away
-//           ]);
-//       }
-//
-//       $success = 'Je voorspellingen zijn opgeslagen!';
-//       // Refresh de predictions array met de nieuwe data
-//   }
-// =============================================================
+    $success = 'Je voorspellingen zijn opgeslagen!';
+
+    // Predictions array vernieuwen met nieuwe data
+    $stmt2 = $pdo->prepare("SELECT * FROM predictions WHERE user_id = ?");
+    $stmt2->execute([$user['id']]);
+    $predictions = [];
+    foreach ($stmt2->fetchAll() as $row) {
+        $predictions[$row['match_id']] = $row;
+    }
+}
 
 
 $pageTitle = 'Voorspellingen';
