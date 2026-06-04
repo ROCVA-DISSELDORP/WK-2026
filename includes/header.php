@@ -31,7 +31,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                     <a href="predictions.php" class="nav-link <?= $currentPage === 'predictions.php' ? 'is-active' : '' ?>">Voorspellingen</a>
                     <div class="user-menu">
                         <span class="user-chip">
-                            <span class="user-avatar"><?= strtoupper(substr(htmlspecialchars($user['name']), 0, 1)) ?></span>
+                            <span class="user-avatar" style="background: <?= avatarColor($user['name']) ?>"><?= strtoupper(substr(htmlspecialchars($user['name']), 0, 1)) ?></span>
                             <span class="user-name"><?= htmlspecialchars($user['name']) ?></span>
                         </span>
                         <a href="logout.php" class="btn btn-ghost btn-sm">Uitloggen</a>

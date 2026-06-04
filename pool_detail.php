@@ -82,7 +82,7 @@ include __DIR__ . '/includes/header.php';
             <div class="member-list">
                 <?php foreach ($members as $member): ?>
                     <div class="member">
-                        <div class="member-avatar">
+                        <div class="member-avatar" style="background: <?= avatarColor($member['name']) ?>">
                             <?= strtoupper(substr(htmlspecialchars($member['name']), 0, 1)) ?>
                         </div>
                         <div class="member-info">

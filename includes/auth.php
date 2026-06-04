@@ -25,6 +25,17 @@ function requireLogin(): void {
 }
 
 /**
+ * Geeft een deterministische achtergrondkleur voor een avatar op basis van de naam.
+ */
+function avatarColor(string $name): string {
+    $colors = ['#e74c3c','#3498db','#2ecc71',
+               '#9b59b6','#e67e22','#1abc9c',
+               '#e91e63','#ff5722'];
+    $index = ord($name[0]) % count($colors);
+    return $colors[$index];
+}
+
+/**
  * Haal de huidige ingelogde gebruiker op (id, name, email).
  */
 function currentUser(): ?array {
